@@ -1,3 +1,22 @@
+Metadata-Version: 2.4
+Name: img-converter
+Version: 2.0.0
+Summary: Universal batch image converter — DDS, PNG, JPEG, WebP, AVIF, HEIF, TIFF, GIF, BMP, QOI
+Author: Image Converter Pro
+License: MIT
+Keywords: image,converter,dds,png,batch
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: PyQt5>=5.15
+Requires-Dist: Pillow>=9.0
+Provides-Extra: avif
+Requires-Dist: pillow-avif-plugin>=0.1; extra == "avif"
+Provides-Extra: heif
+Requires-Dist: pillow-heif>=0.7; extra == "heif"
+Provides-Extra: all
+Requires-Dist: pillow-avif-plugin>=0.1; extra == "all"
+Requires-Dist: pillow-heif>=0.7; extra == "all"
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="screenshot_main.png">
   <img src="screenshot_main.png" alt="Image Converter Pro" width="520">

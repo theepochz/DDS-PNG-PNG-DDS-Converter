@@ -47,7 +47,7 @@ def build():
         "--hidden-import", "PyQt5.sip",
         "--hidden-import", "PIL._tkinter_finder",
         *icon_args,
-        str(src_pkg / "__main__.py"),
+        str(root / "main.py"),
     ]
 
     print("Running PyInstaller...")

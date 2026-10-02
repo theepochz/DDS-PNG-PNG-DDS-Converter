@@ -18,13 +18,14 @@ class ConverterWorker(QThread):
     file_done = pyqtSignal(str, bool, str)
     finished = pyqtSignal(int, int)
 
-    def __init__(self, files, output_dir, output_fmt_label, options, n_workers=None):
+    def __init__(self, files, output_dir, output_fmt_label, options, n_workers=None, base_dir=None):
         super().__init__()
         self.files = files
         self.output_dir = output_dir
         self.output_fmt_label = output_fmt_label
         self.options = options
         self.n_workers = n_workers or os.cpu_count() or 4
+        self.base_dir = base_dir
         self._cancelled = False
 
     def cancel(self):
@@ -66,16 +67,29 @@ class ConverterWorker(QThread):
     def _process_one(self, src):
         if self._cancelled:
             return None
-        name = Path(src).name
-        stem = Path(src).stem
+        src_path = Path(src)
         ext = WRITE_LABEL_TO_FMT.get(self.output_fmt_label).exts[0]
-        dst = str(Path(self.output_dir) / f"{stem}{ext}")
+
+        if self.base_dir:
+            try:
+                rel = src_path.resolve().relative_to(Path(self.base_dir).resolve())
+                dst_path = (Path(self.output_dir) / rel).with_suffix(ext)
+                display_name = str(rel)
+            except ValueError:
+                dst_path = Path(self.output_dir) / f"{src_path.stem}{ext}"
+                display_name = src_path.name
+        else:
+            dst_path = Path(self.output_dir) / f"{src_path.stem}{ext}"
+            display_name = src_path.name
+
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        dst = str(dst_path)
 
         ow = self.options.get("overwrite_mode", "Overwrite")
         if ow == "Skip" and os.path.exists(dst):
-            return (name, True, "skipped")
+            return (display_name, True, "skipped")
         if ow == "Rename (add number)":
-            p = Path(dst)
+            p = dst_path
             n = 1
             while p.exists():
                 p = p.with_name(f"{p.stem}_{n}{p.suffix}")
@@ -89,9 +103,9 @@ class ConverterWorker(QThread):
             self._save_image(image, dst)
             if self.options.get("preserve_mtime", False):
                 shutil.copystat(src, dst)
-            return (name, True, "")
+            return (display_name, True, "")
         except Exception as e:
-            return (name, False, str(e))
+            return (display_name, False, str(e))
 
     def run(self):
         total = len(self.files)

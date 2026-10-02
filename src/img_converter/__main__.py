@@ -11,6 +11,13 @@ import os
 import argparse
 from pathlib import Path
 
+if __package__ in (None, ""):
+    _dir = Path(__file__).resolve().parent
+    for _p in (_dir, _dir.parent):
+        if str(_p) not in sys.path:
+            sys.path.insert(0, str(_p))
+    __package__ = "img_converter"
+
 from . import VERSION, APP_NAME
 from .formats import (
     SUPPORTED_READ_EXTENSIONS, SUPPORTED_WRITE_FORMATS,
@@ -55,13 +62,19 @@ def run_cli(args):
 
     if src.is_file():
         files = [str(src)]
+        base_dir = None
     else:
-        files = sorted([
-            str(f) for f in src.rglob("*") if args.recursive
-        ]) if args.recursive else sorted([
-            str(f) for f in src.iterdir()
-            if f.suffix.lower() in SUPPORTED_READ_EXTENSIONS
-        ])
+        base_dir = src.resolve()
+        if args.recursive:
+            files = sorted([
+                str(f) for f in src.rglob("*")
+                if f.is_file() and f.suffix.lower() in SUPPORTED_READ_EXTENSIONS
+            ])
+        else:
+            files = sorted([
+                str(f) for f in src.iterdir()
+                if f.is_file() and f.suffix.lower() in SUPPORTED_READ_EXTENSIONS
+            ])
 
     if not files:
         print("No supported images found.")
@@ -97,9 +110,26 @@ def run_cli(args):
           f"({n_workers} worker{'s' if n_workers != 1 else ''})...")
 
     def process_one(src_path):
-        name = Path(src_path).name
-        stem = Path(src_path).stem
-        out_path = str(dst / f"{stem}{out_ext}")
+        import shutil
+        src_p = Path(src_path)
+        if base_dir and args.recursive:
+            try:
+                rel = src_p.resolve().relative_to(base_dir)
+                out_path_obj = (dst / rel).with_suffix(out_ext)
+                display_name = str(rel)
+            except ValueError:
+                out_path_obj = dst / f"{src_p.stem}{out_ext}"
+                display_name = src_p.name
+        else:
+            out_path_obj = dst / f"{src_p.stem}{out_ext}"
+            display_name = src_p.name
+
+        out_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        out_path = str(out_path_obj)
+
+        if not args.force and os.path.exists(out_path):
+            return (display_name, True, "skipped")
+
         try:
             image = Image.open(src_path)
             image = prepare_image(image, opts)
@@ -123,9 +153,11 @@ def run_cli(args):
             elif args.format == "HEIF":
                 kw["quality"] = opts["heif_quality"]
             image.save(out_path, format=args.format, **kw)
-            return (name, True, "")
+            if opts["preserve_mtime"]:
+                shutil.copystat(src_path, out_path)
+            return (display_name, True, "")
         except Exception as e:
-            return (name, False, str(e))
+            return (display_name, False, str(e))
 
     with ThreadPoolExecutor(max_workers=n_workers) as pool:
         futures = {pool.submit(process_one, f): f for f in files}

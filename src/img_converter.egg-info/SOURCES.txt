@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/img_converter/__init__.py
+src/img_converter/__main__.py
+src/img_converter/filters.py
+src/img_converter/formats.py
+src/img_converter/ui.py
+src/img_converter/worker.py
+src/img_converter.egg-info/PKG-INFO
+src/img_converter.egg-info/SOURCES.txt
+src/img_converter.egg-info/dependency_links.txt
+src/img_converter.egg-info/entry_points.txt
+src/img_converter.egg-info/requires.txt
+src/img_converter.egg-info/top_level.txt

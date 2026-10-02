@@ -217,11 +217,21 @@ class ConverterApp(QWidget):
         row.addWidget(self.src_browse)
         self.src_drop = DropLine()
         self.src_drop.dropped.connect(self._set_src)
+
+        bottom_row = QHBoxLayout()
         self.src_count = QLabel("")
         self.src_count.setStyleSheet("color:#888; font-size:11px;")
+        bottom_row.addWidget(self.src_count)
+        bottom_row.addStretch()
+
+        self.recursive_cb = QCheckBox("Scan subfolders recursively")
+        self.recursive_cb.setToolTip("Scan source directory and all subdirectories, preserving folder hierarchy")
+        self.recursive_cb.toggled.connect(self._update_file_count)
+        bottom_row.addWidget(self.recursive_cb)
+
         lo.addLayout(row)
         lo.addWidget(self.src_drop)
-        lo.addWidget(self.src_count)
+        lo.addLayout(bottom_row)
         self._root.addWidget(g)
 
     # ── output ──
@@ -437,13 +447,30 @@ class ConverterApp(QWidget):
         if p:
             self._load_preview(p)
 
+    def _get_source_files(self) -> list:
+        if not self.source_dir or not os.path.isdir(self.source_dir):
+            return []
+        src_p = Path(self.source_dir)
+        try:
+            if self.recursive_cb.isChecked():
+                return sorted([
+                    str(f) for f in src_p.rglob("*")
+                    if f.is_file() and f.suffix.lower() in SUPPORTED_READ_EXTENSIONS
+                ])
+            else:
+                return sorted([
+                    str(f) for f in src_p.iterdir()
+                    if f.is_file() and f.suffix.lower() in SUPPORTED_READ_EXTENSIONS
+                ])
+        except Exception:
+            return []
+
     def _auto_pick_preview(self):
         if not self.source_dir:
             return
-        for f in sorted(os.listdir(self.source_dir)):
-            if Path(f).suffix.lower() in SUPPORTED_READ_EXTENSIONS:
-                self._load_preview(os.path.join(self.source_dir, f))
-                return
+        files = self._get_source_files()
+        if files:
+            self._load_preview(files[0])
 
     def _load_preview(self, path):
         try:
@@ -565,15 +592,12 @@ class ConverterApp(QWidget):
         if not self.source_dir:
             self.src_count.setText("")
             return
-        try:
-            files = [f for f in os.listdir(self.source_dir)
-                     if Path(f).suffix.lower() in SUPPORTED_READ_EXTENSIONS]
-            n = len(files)
-            self.src_count.setText(
-                f"{n} image{'s' if n != 1 else ''} found" if n else "No supported images"
-            )
-        except Exception:
-            self.src_count.setText("")
+        files = self._get_source_files()
+        n = len(files)
+        rec_tag = " (recursive)" if self.recursive_cb.isChecked() else ""
+        self.src_count.setText(
+            f"{n} image{'s' if n != 1 else ''} found{rec_tag}" if n else "No supported images"
+        )
 
     def _fmt_val(self, key, attr="currentText", fallback=""):
         pair = self._fmt_option_rows.get(key)
@@ -622,10 +646,7 @@ class ConverterApp(QWidget):
         if not self.output_dir:
             self._set_out(self.source_dir)
 
-        files = sorted([
-            os.path.join(self.source_dir, f) for f in os.listdir(self.source_dir)
-            if Path(f).suffix.lower() in SUPPORTED_READ_EXTENSIONS
-        ])
+        files = self._get_source_files()
         if not files:
             QMessageBox.information(self, "No Files", "No supported images in source directory.")
             return
@@ -635,14 +656,16 @@ class ConverterApp(QWidget):
         opts = self._gather_opts()
         label = self.fmt_combo.currentData()
         n = self.threads_spin.value()
-        self.worker = ConverterWorker(files, self.output_dir, label, opts, n_workers=n)
+        base_dir = self.source_dir if self.recursive_cb.isChecked() else None
+        self.worker = ConverterWorker(files, self.output_dir, label, opts, n_workers=n, base_dir=base_dir)
         self.worker.progress.connect(self._on_progress)
         self.worker.file_done.connect(self._on_file_done)
         self.worker.finished.connect(self._on_finished)
 
         self._set_busy(True)
         self.log.clear()
-        self.log.append(f"Converting {len(files)} -> {label}  |  {n} worker{'s' if n!=1 else ''}\n")
+        rec_info = " [recursive]" if self.recursive_cb.isChecked() else ""
+        self.log.append(f"Converting {len(files)} -> {label}{rec_info}  |  {n} worker{'s' if n!=1 else ''}\n")
         self.worker.start()
 
     def _cancel(self):
@@ -669,7 +692,7 @@ class ConverterApp(QWidget):
     def _set_busy(self, busy):
         self.start_btn.setEnabled(not busy)
         self.cancel_btn.setEnabled(busy)
-        for w in [self.src_browse, self.out_browse, self.out_same, self.fmt_combo, self.threads_spin]:
+        for w in [self.src_browse, self.out_browse, self.out_same, self.fmt_combo, self.threads_spin, self.recursive_cb]:
             w.setEnabled(not busy)
         self.progress_bar.setVisible(busy)
         self.opt_grp.setEnabled(not busy)

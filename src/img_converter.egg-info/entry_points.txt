@@ -1,0 +1,2 @@
+[console_scripts]
+img-converter = img_converter.__main__:main

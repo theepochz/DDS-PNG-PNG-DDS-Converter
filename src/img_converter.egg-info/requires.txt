@@ -1,0 +1,12 @@
+PyQt5>=5.15
+Pillow>=9.0
+
+[all]
+pillow-avif-plugin>=0.1
+pillow-heif>=0.7
+
+[avif]
+pillow-avif-plugin>=0.1
+
+[heif]
+pillow-heif>=0.7
